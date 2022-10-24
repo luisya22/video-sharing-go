@@ -16,3 +16,5 @@ storage/html/
 storage/videos/
 
 .idea/
+
+.envrc

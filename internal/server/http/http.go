@@ -18,7 +18,7 @@ type HTTP struct {
 	api    *api.API
 }
 
-// TODO: Move config where is used DB, cache, etc...
+// TODO: Move config to where ii is being used DB, cache, etc...
 type Config struct {
 	Port int
 	Env  string
@@ -35,6 +35,13 @@ type Config struct {
 	}
 	Cors struct {
 		TrustedOrigins []string
+	}
+	FileStore struct {
+		AwsAccessKeyId string
+		AwsSecretKey   string
+		AwsBucketName  string
+		AwsRegion      string
+		AwsEndpoint    string
 	}
 }
 
