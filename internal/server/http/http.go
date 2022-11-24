@@ -20,14 +20,8 @@ type HTTP struct {
 
 // TODO: Move config to where ii is being used DB, cache, etc...
 type Config struct {
-	Port int
-	Env  string
-	Db   struct {
-		Dsn          string
-		MaxOpenConns int
-		MaxIdleConns int
-		MaxIdleTime  string
-	}
+	Port    int
+	Env     string
 	Limiter struct {
 		Rps     float64
 		Burst   int
@@ -35,13 +29,6 @@ type Config struct {
 	}
 	Cors struct {
 		TrustedOrigins []string
-	}
-	FileStore struct {
-		AwsAccessKeyId string
-		AwsSecretKey   string
-		AwsBucketName  string
-		AwsRegion      string
-		AwsEndpoint    string
 	}
 }
 
@@ -69,7 +56,7 @@ func (h *HTTP) Start() {
 			"addr": h.server.Addr,
 		})
 
-		h.api.Wg.Wait()
+		h.api.BackgroundRoutine.Wg.Wait()
 		shutdownError <- nil
 
 	}()

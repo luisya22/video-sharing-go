@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"luismatosgarcia.dev/video-sharing-go/internal/background"
+	"luismatosgarcia.dev/video-sharing-go/internal/pkg/filestore"
 	"luismatosgarcia.dev/video-sharing-go/internal/validator"
 	"mime/multipart"
 	"time"
@@ -19,14 +21,17 @@ type Video struct {
 	Description   string    `json:"description,omitempty"`
 	Path          string    `json:"path,omitempty"`
 	ImgPath       string    `json:"img_path,omitempty"`
-	PublishedDate time.Time `json:"published_date:omitempty"`
+	Status        string    `json:"status,omitempty"`
+	PublishedDate time.Time `json:"published_date,omitempty"`
 	CreatedAt     time.Time `json:"-"`
 	UpdatedAt     time.Time `json:"-"`
 	Version       int32     `json:"version"`
 }
 
 type Videos struct {
-	store store
+	store      store
+	filestore  filestore.FileStore
+	background *background.Routine
 }
 
 func ValidateVideo(v *validator.Validator, video *Video) {
@@ -41,9 +46,41 @@ func ValidateVideo(v *validator.Validator, video *Video) {
 func (vs *Videos) UploadVideo(ctx context.Context, videoFile *multipart.File, fileHeader *multipart.FileHeader) (*Video, error, map[string]string) {
 	// Upload to S3 Bucket
 
-	//Save to database
+	//TODO: Save to database return ID create background job with ID then update
+	video := &Video{}
+
+	err := vs.store.Insert(ctx, video)
+	if err != nil {
+		return nil, err, nil
+	}
+
+	args := []any{*video}
+
+	vs.background.Dispatch(func(args []any) {
+		file := *videoFile
+		defer file.Close()
+
+		//TODO: The video name should be the id
+		var backgroundVideo = args[0].(Video)
+
+		filepath, backgroundErr := vs.filestore.Set(backgroundVideo.ID, videoFile, fileHeader)
+		if backgroundErr != nil {
+			vs.background.Logger.PrintError(backgroundErr, nil)
+		}
+
+		vs.background.Logger.PrintInfo(filepath, nil)
+
+		video.Path = filepath
+		video.Status = "Uploaded"
+
+		backgroundErr = vs.store.Update(ctx, video)
+		if backgroundErr != nil {
+			vs.background.Logger.PrintError(backgroundErr, nil)
+		}
+	}, args)
+
 	// Return Video
-	return nil, nil, nil
+	return video, nil, nil
 }
 
 func (vs *Videos) CreateVideo(ctx context.Context, video *Video) (*Video, error, map[string]string) {
@@ -62,14 +99,26 @@ func (vs *Videos) CreateVideo(ctx context.Context, video *Video) (*Video, error,
 	return video, nil, nil
 }
 
+func (vs *Videos) ReadVideo(ctx context.Context, videoId int64) (*Video, error, map[string]string) {
+
+	video, err := vs.store.ReadById(ctx, videoId)
+	if err != nil {
+		return nil, err, nil
+	}
+
+	return video, nil, nil
+}
+
 // Initialize Video Service
-func NewService(db *sql.DB) (*Videos, error) {
+func NewService(db *sql.DB, fs filestore.FileStore, bg *background.Routine) (*Videos, error) {
 	vs, err := newStore(db)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Videos{
-		store: vs,
+		store:      vs,
+		filestore:  fs,
+		background: bg,
 	}, nil
 }

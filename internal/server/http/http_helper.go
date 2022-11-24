@@ -128,19 +128,3 @@ func (h *Helper) readInt(qs url.Values, key string, defaultValue int, v *validat
 
 	return i
 }
-
-func (h *Helper) background(fn func()) {
-	h.api.Wg.Add(1)
-
-	go func() {
-		defer h.api.Wg.Done()
-
-		defer func() {
-			if err := recover(); err != nil {
-				h.api.Logger.PrintError(fmt.Errorf("%s", err), nil)
-			}
-		}()
-
-		fn()
-	}()
-}

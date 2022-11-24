@@ -13,22 +13,26 @@ type Handlers struct {
 	errorHandler *ErrorHandler
 }
 
-func (handler *Handlers) routes() http.Handler {
+func (h *Handlers) routes() http.Handler {
 	router := httprouter.New()
 
-	router.NotFound = http.HandlerFunc(handler.errorHandler.notFoundResponse)
-	router.MethodNotAllowed = http.HandlerFunc(handler.errorHandler.methodNotAllowedResponse)
+	router.NotFound = http.HandlerFunc(h.errorHandler.notFoundResponse)
+	router.MethodNotAllowed = http.HandlerFunc(h.errorHandler.methodNotAllowedResponse)
 
 	fileServer := http.FileServer(http.FS(storage.Files))
 	router.Handler(http.MethodGet, "/videos/*filepath", fileServer)
 	router.Handler(http.MethodGet, "/html/*filepath", fileServer)
 
-	router.HandlerFunc(http.MethodGet, "/v1/healthcheck", handler.healthCheckHandler)
+	router.HandlerFunc(http.MethodGet, "/v1/healthcheck", h.healthCheckHandler)
+
+	// Video Routes
+	router.HandlerFunc(http.MethodPost, "/v1/videos", h.UploadVideo)
+	router.HandlerFunc(http.MethodGet, "/v1/videos/:id", h.ReadVideo)
 
 	return router
 }
 
-func (handler *Handlers) healthCheckHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) healthCheckHandler(w http.ResponseWriter, r *http.Request) {
 	env := envelope{
 		"status": "available",
 		"system_info": map[string]string{
@@ -37,8 +41,8 @@ func (handler *Handlers) healthCheckHandler(w http.ResponseWriter, r *http.Reque
 		},
 	}
 
-	err := handler.httpHelper.writeJSON(w, http.StatusOK, env, nil)
+	err := h.httpHelper.writeJSON(w, http.StatusOK, env, nil)
 	if err != nil {
-		handler.errorHandler.serverErrorResponse(w, r, err)
+		h.errorHandler.serverErrorResponse(w, r, err)
 	}
 }

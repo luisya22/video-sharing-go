@@ -13,7 +13,7 @@ func (api *API) CreateVideo(ctx context.Context, v *videos.Video) (*videos.Video
 		return nil, err, validationErrors
 	}
 
-	return v, err, validationErrors
+	return v, nil, nil
 }
 
 func (api *API) UploadVideo(ctx context.Context, videoFile *multipart.File, fileHeader *multipart.FileHeader) (*videos.Video, error, map[string]string) {
@@ -23,5 +23,15 @@ func (api *API) UploadVideo(ctx context.Context, videoFile *multipart.File, file
 		return nil, err, validationErrors
 	}
 
-	return v, err, validationErrors
+	return v, nil, nil
+}
+
+func (api *API) ReadVideo(ctx context.Context, videoId int64) (*videos.Video, error, map[string]string) {
+	v, err, validationErrors := api.videos.ReadVideo(ctx, videoId)
+	if err != nil {
+		api.Logger.PrintError(err, validationErrors)
+		return nil, err, validationErrors
+	}
+
+	return v, nil, nil
 }

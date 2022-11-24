@@ -3,19 +3,31 @@ package datastore
 import (
 	"context"
 	"database/sql"
-	"luismatosgarcia.dev/video-sharing-go/internal/server/http"
+	"errors"
 	"time"
 )
 
-func NewService(cfg *http.Config) (*sql.DB, error) {
-	db, err := sql.Open("postgres", cfg.Db.Dsn)
+var (
+	ErrRecordNotFound = errors.New("record not found")
+	ErrEditConflict   = errors.New("edit conflict")
+)
+
+type Config struct {
+	Dsn          string
+	MaxOpenConns int
+	MaxIdleConns int
+	MaxIdleTime  string
+}
+
+func NewService(cfg *Config) (*sql.DB, error) {
+	db, err := sql.Open("postgres", cfg.Dsn)
 	if err != nil {
 		return nil, err
 	}
 
-	db.SetMaxOpenConns(cfg.Db.MaxOpenConns)
-	db.SetMaxIdleConns(cfg.Db.MaxIdleConns)
-	duration, err := time.ParseDuration(cfg.Db.MaxIdleTime)
+	db.SetMaxOpenConns(cfg.MaxOpenConns)
+	db.SetMaxIdleConns(cfg.MaxIdleConns)
+	duration, err := time.ParseDuration(cfg.MaxIdleTime)
 	if err != nil {
 		return nil, err
 	}

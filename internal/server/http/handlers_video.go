@@ -21,10 +21,8 @@ func (h *Handlers) UploadVideo(w http.ResponseWriter, r *http.Request) {
 		h.errorHandler.badRequestResponse(w, r, err)
 	}
 
-	defer file.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	cancel()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
 
 	//TODO: Setup localstack and file upload interface
 
@@ -36,6 +34,7 @@ func (h *Handlers) UploadVideo(w http.ResponseWriter, r *http.Request) {
 		default:
 			h.errorHandler.serverErrorResponse(w, r, err)
 		}
+		return
 	}
 
 	data := envelope{
@@ -46,6 +45,37 @@ func (h *Handlers) UploadVideo(w http.ResponseWriter, r *http.Request) {
 	headers.Set("Location", fmt.Sprintf("/v1/videos/%d", videoId))
 
 	err = h.httpHelper.writeJSON(w, http.StatusOK, data, headers)
+	if err != nil {
+		h.errorHandler.serverErrorResponse(w, r, err)
+	}
+}
+
+func (h *Handlers) ReadVideo(w http.ResponseWriter, r *http.Request) {
+	id, err := h.httpHelper.readIDParam(r)
+	if err != nil {
+		h.errorHandler.notFoundResponse(w, r)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	video, err, validationErrors := h.api.ReadVideo(ctx, id)
+	if err != nil {
+		switch {
+		case errors.Is(err, videos.VideoValidationError):
+			h.errorHandler.failedValidationResponse(w, r, validationErrors)
+		default:
+			h.errorHandler.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	data := envelope{
+		"video": video,
+	}
+
+	err = h.httpHelper.writeJSON(w, http.StatusOK, data, nil)
 	if err != nil {
 		h.errorHandler.serverErrorResponse(w, r, err)
 	}

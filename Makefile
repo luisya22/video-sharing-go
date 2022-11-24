@@ -42,6 +42,12 @@ db/migrations/up: confirm
 	@echo 'Running up migrations...'
 	migrate -path ./migrations -database ${VIDEO_SHARING_APP_DB_DSN} up
 
+## db/migrations/down: rollback migrations
+.PHONY: db/migrations/down
+db/migrations/down: confirm
+	@echo 'Rolling back migrations'
+	migrate -path ./migrations -database ${VIDEO_SHARING_APP_DB_DSN} down
+
 # ==================================================================================== #
 # QUALITY CONTROL
 # ==================================================================================== #

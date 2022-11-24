@@ -1,57 +1,76 @@
 package filestore
 
 import (
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
-	"luismatosgarcia.dev/video-sharing-go/internal/server/http"
+	"context"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"mime/multipart"
 )
 
-type Filestore interface {
-	Set(file *multipart.File, fileHeader *multipart.FileHeader) (string, error)
+type Config struct {
+	AwsAccessKeyId string
+	AwsSecretKey   string
+	AwsBucketName  string
+	AwsRegion      string
+	AwsEndpoint    string
+}
+
+type FileStore interface {
+	Set(id int64, file *multipart.File, fileHeader *multipart.FileHeader) (string, error)
 	Get()
 }
 
 type S3Bucket struct {
-	region     string
-	bucketName string
-	endpoint   string
-	creds      *credentials.Credentials
+	region         string
+	bucketName     string
+	endpoint       string
+	awsAccessKeyId string
+	awsSecretKey   string
 }
 
-func (s S3Bucket) Set(file *multipart.File, fileHeader *multipart.FileHeader) (string, error) {
-	sess, err := session.NewSessionWithOptions(session.Options{
-		Profile: "default",
-		Config: aws.Config{
-			Region:      aws.String(s.region),
-			Credentials: s.creds,
-			Endpoint:    &s.endpoint,
-		},
+func (s S3Bucket) Set(id int64, file *multipart.File, fileHeader *multipart.FileHeader) (string, error) {
+	//Config: Region, Credentials, Config.EndpointResolverWithOptions
+
+	customResolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
+		return aws.Endpoint{
+			PartitionID:   "aws",
+			URL:           s.endpoint,
+			SigningRegion: s.region,
+		}, nil
 	})
+
+	cfg, err := config.LoadDefaultConfig(
+		context.TODO(),
+		config.WithEndpointResolverWithOptions(customResolver),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(s.awsAccessKeyId, s.awsSecretKey, "")),
+	)
 	if err != nil {
 		return "", err
 	}
 
-	uploader := s3manager.NewUploader(sess)
-
-	uploadOutput, err := s.UploadFile(uploader, file, fileHeader)
-
-	return uploadOutput.Location, err
-}
-
-func (s S3Bucket) UploadFile(uploader *s3manager.Uploader, file *multipart.File, fileHeader *multipart.FileHeader) (*s3manager.UploadOutput, error) {
-	uploadOutput, err := uploader.Upload(&s3manager.UploadInput{
-		Bucket: aws.String(s.bucketName),
-		Key:    aws.String(fileHeader.Filename),
-		Body:   *file,
-	})
+	s3client := s3.NewFromConfig(cfg)
+	_, err = s.UploadFile(s3client, file, fileHeader)
 	if err != nil {
-		return uploadOutput, err
+		return "", err
 	}
 
-	return uploadOutput, err
+	return "videos/" + fileHeader.Filename, nil
+}
+
+func (s S3Bucket) UploadFile(client *s3.Client, file *multipart.File, fileHeader *multipart.FileHeader) (*s3.PutObjectOutput, error) {
+	uploadOutput, err := client.PutObject(context.TODO(), &s3.PutObjectInput{
+		Bucket:        &s.bucketName,
+		Key:           aws.String("videos/" + fileHeader.Filename),
+		Body:          *file,
+		ContentLength: fileHeader.Size,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return uploadOutput, nil
 }
 
 func (s S3Bucket) Get() {
@@ -59,17 +78,24 @@ func (s S3Bucket) Get() {
 	panic("implement me")
 }
 
-func NewFileStore(fileStoreType string, cfg *http.Config) (Filestore, error) {
+func NewFileStore(fileStoreType string, cfg Config) (FileStore, error) {
 	//TODO Change to registry
 	switch fileStoreType {
 	case "s3":
 		return S3Bucket{
-			region:     cfg.FileStore.AwsRegion,
-			bucketName: cfg.FileStore.AwsBucketName,
-			creds:      credentials.NewStaticCredentials(cfg.FileStore.AwsAccessKeyId, cfg.FileStore.AwsSecretKey, ""),
-			endpoint:   cfg.FileStore.AwsEndpoint,
+			region:         cfg.AwsRegion,
+			bucketName:     cfg.AwsBucketName,
+			awsAccessKeyId: cfg.AwsAccessKeyId,
+			awsSecretKey:   cfg.AwsSecretKey,
+			endpoint:       cfg.AwsEndpoint,
 		}, nil
 	default:
-		return nil, nil
+		return S3Bucket{
+			region:         cfg.AwsRegion,
+			bucketName:     cfg.AwsBucketName,
+			awsAccessKeyId: cfg.AwsAccessKeyId,
+			awsSecretKey:   cfg.AwsSecretKey,
+			endpoint:       cfg.AwsEndpoint,
+		}, nil
 	}
 }
