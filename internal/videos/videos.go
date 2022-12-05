@@ -28,6 +28,12 @@ type Video struct {
 	Version       int32     `json:"version"`
 }
 
+type VideoInput struct {
+	Title         *string    `json:"title"`
+	Description   *string    `json:"description"`
+	PublishedDate *time.Time `json:"published_date"`
+}
+
 type Videos struct {
 	store      store
 	filestore  filestore.FileStore
@@ -85,10 +91,10 @@ func (vs *Videos) UploadVideo(ctx context.Context, videoFile *multipart.File, fi
 
 func (vs *Videos) CreateVideo(ctx context.Context, video *Video) (*Video, error, map[string]string) {
 
-	v := validator.New()
+	validator := validator.New()
 
-	if ValidateVideo(v, video); !v.Valid() {
-		return nil, VideoValidationError, v.Errors
+	if ValidateVideo(validator, video); !validator.Valid() {
+		return nil, VideoValidationError, validator.Errors
 	}
 
 	err := vs.store.Insert(ctx, video)
@@ -102,6 +108,39 @@ func (vs *Videos) CreateVideo(ctx context.Context, video *Video) (*Video, error,
 func (vs *Videos) ReadVideo(ctx context.Context, videoId int64) (*Video, error, map[string]string) {
 
 	video, err := vs.store.ReadById(ctx, videoId)
+	if err != nil {
+		return nil, err, nil
+	}
+
+	return video, nil, nil
+}
+
+func (vs *Videos) UpdateVideo(ctx context.Context, videoId int64, videoInput *VideoInput) (*Video, error, map[string]string) {
+
+	video, err := vs.store.ReadById(ctx, videoId)
+	if err != nil {
+		return nil, err, nil
+	}
+
+	if videoInput.Title != nil {
+		video.Title = *videoInput.Title
+	}
+
+	if videoInput.Description != nil {
+		video.Description = *videoInput.Description
+	}
+
+	if videoInput.PublishedDate != nil {
+		video.PublishedDate = *videoInput.PublishedDate
+	}
+
+	validator := validator.New()
+
+	if ValidateVideo(validator, video); !validator.Valid() {
+		return nil, VideoValidationError, validator.Errors
+	}
+
+	err = vs.store.Update(ctx, video)
 	if err != nil {
 		return nil, err, nil
 	}

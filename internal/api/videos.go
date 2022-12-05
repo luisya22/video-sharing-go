@@ -35,3 +35,13 @@ func (api *API) ReadVideo(ctx context.Context, videoId int64) (*videos.Video, er
 
 	return v, nil, nil
 }
+
+func (api *API) UpdateVideo(ctx context.Context, videoId int64, videoInput *videos.VideoInput) (*videos.Video, error, map[string]string) {
+	v, err, validatorErrors := api.videos.UpdateVideo(ctx, videoId, videoInput)
+	if err != nil {
+		api.Logger.PrintError(err, validatorErrors)
+		return nil, err, validatorErrors
+	}
+
+	return v, nil, nil
+}

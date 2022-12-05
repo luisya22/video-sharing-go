@@ -76,8 +76,8 @@ func (v *videoStore) ReadById(ctx context.Context, videoId int64) (*Video, error
 
 	err := v.db.QueryRowContext(dbCtx, query, videoId).Scan(
 		&video.ID,
-		&video.Description,
 		&video.Title,
+		&video.Description,
 		&video.Path,
 		&video.ImgPath,
 		&video.Status,

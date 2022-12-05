@@ -24,8 +24,6 @@ func (h *Handlers) UploadVideo(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	//TODO: Setup localstack and file upload interface
-
 	videoId, err, validationErrors := h.api.UploadVideo(ctx, &file, fileHeader)
 	if err != nil {
 		switch {
@@ -42,7 +40,7 @@ func (h *Handlers) UploadVideo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	headers := make(http.Header)
-	headers.Set("Location", fmt.Sprintf("/v1/videos/%d", videoId))
+	headers.Set("Location", fmt.Sprintf("/v1/videos/%v", videoId))
 
 	err = h.httpHelper.writeJSON(w, http.StatusOK, data, headers)
 	if err != nil {
@@ -65,6 +63,45 @@ func (h *Handlers) ReadVideo(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, videos.VideoValidationError):
 			h.errorHandler.failedValidationResponse(w, r, validationErrors)
+		default:
+			h.errorHandler.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	data := envelope{
+		"video": video,
+	}
+
+	err = h.httpHelper.writeJSON(w, http.StatusOK, data, nil)
+	if err != nil {
+		h.errorHandler.serverErrorResponse(w, r, err)
+	}
+}
+
+func (h *Handlers) UpdateVideo(w http.ResponseWriter, r *http.Request) {
+	id, err := h.httpHelper.readIDParam(r)
+	if err != nil {
+		h.errorHandler.notFoundResponse(w, r)
+		return
+	}
+
+	var input = videos.VideoInput{}
+
+	err = h.httpHelper.readJSON(w, r, &input)
+	if err != nil {
+		h.errorHandler.badRequestResponse(w, r, err)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	video, err, validatorErrors := h.api.UpdateVideo(ctx, id, &input)
+	if err != nil {
+		switch {
+		case errors.Is(err, videos.VideoValidationError):
+			h.errorHandler.failedValidationResponse(w, r, validatorErrors)
 		default:
 			h.errorHandler.serverErrorResponse(w, r, err)
 		}

@@ -28,6 +28,7 @@ func (h *Handlers) routes() http.Handler {
 	// Video Routes
 	router.HandlerFunc(http.MethodPost, "/v1/videos", h.UploadVideo)
 	router.HandlerFunc(http.MethodGet, "/v1/videos/:id", h.ReadVideo)
+	router.HandlerFunc(http.MethodPatch, "/v1/videos/:id", h.UpdateVideo)
 
 	return router
 }
