@@ -43,7 +43,7 @@ func (v *videoStore) Update(ctx context.Context, video *Video) error {
 		video.Path,
 		video.ImgPath,
 		video.Status,
-		video.PublishedDate,
+		video.PublishedDate.UTC(),
 		video.ID,
 		video.Version,
 	}
