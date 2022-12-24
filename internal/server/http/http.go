@@ -56,7 +56,7 @@ func (h *HTTP) Start() {
 			"addr": h.server.Addr,
 		})
 
-		h.api.BackgroundRoutine.Wg.Wait()
+		h.api.BackgroundRoutine.Wait()
 		shutdownError <- nil
 
 	}()

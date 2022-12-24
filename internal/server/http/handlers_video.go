@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"luismatosgarcia.dev/video-sharing-go/internal/videos"
 	"net/http"
 	"time"
@@ -16,10 +17,12 @@ func (h *Handlers) UploadVideo(w http.ResponseWriter, r *http.Request) {
 		h.errorHandler.badRequestResponse(w, r, err)
 	}
 
-	file, fileHeader, err := r.FormFile("video")
+	f, fileHeader, err := r.FormFile("video")
 	if err != nil {
 		h.errorHandler.badRequestResponse(w, r, err)
 	}
+
+	file := io.Reader(f)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()

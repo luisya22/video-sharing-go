@@ -13,11 +13,11 @@ var (
 
 type API struct {
 	Logger            *jsonlog.Logger
-	BackgroundRoutine *background.Routine
-	videos            *videos.Videos
+	BackgroundRoutine background.Routine
+	videos            videos.Videos
 }
 
-func NewService(l *jsonlog.Logger, bg *background.Routine, v *videos.Videos) (*API, error) {
+func NewService(l *jsonlog.Logger, bg background.Routine, v videos.Videos) (*API, error) {
 	return &API{
 		Logger:            l,
 		videos:            v,

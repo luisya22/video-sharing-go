@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"io"
 	"luismatosgarcia.dev/video-sharing-go/internal/background"
 	"luismatosgarcia.dev/video-sharing-go/internal/pkg/filestore"
 	"luismatosgarcia.dev/video-sharing-go/internal/validator"
@@ -12,7 +13,7 @@ import (
 )
 
 var (
-	VideoValidationError = errors.New("video data is not valid")
+	VideoValidationError = errors.New("Video data is not valid")
 )
 
 type Video struct {
@@ -34,10 +35,18 @@ type VideoInput struct {
 	PublishedDate *time.Time `json:"published_date"`
 }
 
-type Videos struct {
+type Videos interface {
+	UploadVideo(ctx context.Context, videoFileReader *io.Reader, fileHeader *multipart.FileHeader) (*Video, error, map[string]string)
+	uploadVideoBackground(ctx context.Context, video *Video, videoFileReader *io.Reader, fileHeader *multipart.FileHeader)
+	CreateVideo(ctx context.Context, video *Video) (*Video, error, map[string]string)
+	ReadVideo(ctx context.Context, videoId int64) (*Video, error, map[string]string)
+	UpdateVideo(ctx context.Context, videoId int64, videoInput *VideoInput) (*Video, error, map[string]string)
+}
+
+type Service struct {
 	store      store
 	filestore  filestore.FileStore
-	background *background.Routine
+	background background.Routine
 }
 
 func ValidateVideo(v *validator.Validator, video *Video) {
@@ -49,7 +58,7 @@ func ValidateVideo(v *validator.Validator, video *Video) {
 	v.Check(video.PublishedDate.IsZero() || video.PublishedDate.After(time.Now()), "published_date", "must be in the future")
 }
 
-func (vs *Videos) UploadVideo(ctx context.Context, videoFile *multipart.File, fileHeader *multipart.FileHeader) (*Video, error, map[string]string) {
+func (vs *Service) UploadVideo(ctx context.Context, videoFileReader *io.Reader, fileHeader *multipart.FileHeader) (*Video, error, map[string]string) {
 	// Upload to S3 Bucket
 
 	//TODO: Save to database return ID create background job with ID then update
@@ -60,36 +69,45 @@ func (vs *Videos) UploadVideo(ctx context.Context, videoFile *multipart.File, fi
 		return nil, err, nil
 	}
 
-	args := []any{*video}
-
-	vs.background.Dispatch(func(args []any) {
-		file := *videoFile
-		defer file.Close()
-
-		//TODO: The video name should be the id
-		var backgroundVideo = args[0].(Video)
-
-		filepath, backgroundErr := vs.filestore.Set(backgroundVideo.ID, videoFile, fileHeader)
-		if backgroundErr != nil {
-			vs.background.Logger.PrintError(backgroundErr, nil)
-		}
-
-		vs.background.Logger.PrintInfo(filepath, nil)
-
-		video.Path = filepath
-		video.Status = "Uploaded"
-
-		backgroundErr = vs.store.Update(ctx, video)
-		if backgroundErr != nil {
-			vs.background.Logger.PrintError(backgroundErr, nil)
-		}
-	}, args)
+	vs.uploadVideoBackground(ctx, video, videoFileReader, fileHeader)
 
 	// Return Video
 	return video, nil, nil
 }
 
-func (vs *Videos) CreateVideo(ctx context.Context, video *Video) (*Video, error, map[string]string) {
+func (vs *Service) uploadVideoBackground(ctx context.Context, video *Video, videoFileReader *io.Reader, fileHeader *multipart.FileHeader) {
+
+	args := []any{*video, videoFileReader, fileHeader}
+
+	//TODO: There should be a way to retry. Maybe should store the jobs and run it with workers.
+	vs.background.Dispatch(func(args []any) {
+
+		//TODO: The Video name should be the id
+		var backgroundVideo = args[0].(Video)
+		var vFileReader = args[1].(*io.Reader)
+		var vFileCloser = io.NopCloser(*vFileReader)
+		var vFileHeader = args[2].(*multipart.FileHeader)
+
+		defer vFileCloser.Close()
+
+		filepath, backgroundErr := vs.filestore.Set(backgroundVideo.ID, vFileReader, vFileHeader)
+		if backgroundErr != nil {
+			vs.background.PrintError(backgroundErr, nil)
+		}
+
+		vs.background.PrintInfo(filepath, nil)
+
+		backgroundVideo.Path = filepath
+		backgroundVideo.Status = "Uploaded"
+
+		backgroundErr = vs.store.Update(ctx, &backgroundVideo)
+		if backgroundErr != nil {
+			vs.background.PrintError(backgroundErr, nil)
+		}
+	}, args)
+}
+
+func (vs *Service) CreateVideo(ctx context.Context, video *Video) (*Video, error, map[string]string) {
 
 	validator := validator.New()
 
@@ -105,7 +123,7 @@ func (vs *Videos) CreateVideo(ctx context.Context, video *Video) (*Video, error,
 	return video, nil, nil
 }
 
-func (vs *Videos) ReadVideo(ctx context.Context, videoId int64) (*Video, error, map[string]string) {
+func (vs *Service) ReadVideo(ctx context.Context, videoId int64) (*Video, error, map[string]string) {
 
 	video, err := vs.store.ReadById(ctx, videoId)
 	if err != nil {
@@ -115,7 +133,7 @@ func (vs *Videos) ReadVideo(ctx context.Context, videoId int64) (*Video, error, 
 	return video, nil, nil
 }
 
-func (vs *Videos) UpdateVideo(ctx context.Context, videoId int64, videoInput *VideoInput) (*Video, error, map[string]string) {
+func (vs *Service) UpdateVideo(ctx context.Context, videoId int64, videoInput *VideoInput) (*Video, error, map[string]string) {
 
 	video, err := vs.store.ReadById(ctx, videoId)
 	if err != nil {
@@ -149,15 +167,42 @@ func (vs *Videos) UpdateVideo(ctx context.Context, videoId int64, videoInput *Vi
 }
 
 // Initialize Video Service
-func NewService(db *sql.DB, fs filestore.FileStore, bg *background.Routine) (*Videos, error) {
+func NewService(db *sql.DB, fs filestore.FileStore, bg background.Routine) (Videos, error) {
 	vs, err := newStore(db)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Videos{
+	return &Service{
 		store:      vs,
 		filestore:  fs,
 		background: bg,
 	}, nil
+}
+
+// Mock
+
+type Mock struct {
+	Video     *Video
+	Err       error
+	ErrorsMap map[string]string
+}
+
+func (m Mock) UploadVideo(ctx context.Context, videoFileReader *io.Reader, fileHeader *multipart.FileHeader) (*Video, error, map[string]string) {
+	return m.Video, m.Err, m.ErrorsMap
+}
+
+func (m Mock) uploadVideoBackground(ctx context.Context, video *Video, videoFileReader *io.Reader, fileHeader *multipart.FileHeader) {
+}
+
+func (m Mock) CreateVideo(ctx context.Context, video *Video) (*Video, error, map[string]string) {
+	return m.Video, m.Err, m.ErrorsMap
+}
+
+func (m Mock) ReadVideo(ctx context.Context, videoId int64) (*Video, error, map[string]string) {
+	return m.Video, m.Err, m.ErrorsMap
+}
+
+func (m Mock) UpdateVideo(ctx context.Context, videoId int64, videoInput *VideoInput) (*Video, error, map[string]string) {
+	return m.Video, m.Err, m.ErrorsMap
 }

@@ -6,6 +6,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"io"
+	"luismatosgarcia.dev/video-sharing-go/internal/tests"
 	"mime/multipart"
 )
 
@@ -18,7 +20,7 @@ type Config struct {
 }
 
 type FileStore interface {
-	Set(id int64, file *multipart.File, fileHeader *multipart.FileHeader) (string, error)
+	Set(id int64, file *io.Reader, fileHeader *multipart.FileHeader) (string, error)
 	Get()
 }
 
@@ -30,7 +32,7 @@ type S3Bucket struct {
 	awsSecretKey   string
 }
 
-func (s S3Bucket) Set(id int64, file *multipart.File, fileHeader *multipart.FileHeader) (string, error) {
+func (s S3Bucket) Set(id int64, file *io.Reader, fileHeader *multipart.FileHeader) (string, error) {
 	//Config: Region, Credentials, Config.EndpointResolverWithOptions
 
 	customResolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
@@ -59,7 +61,7 @@ func (s S3Bucket) Set(id int64, file *multipart.File, fileHeader *multipart.File
 	return "videos/" + fileHeader.Filename, nil
 }
 
-func (s S3Bucket) UploadFile(client *s3.Client, file *multipart.File, fileHeader *multipart.FileHeader) (*s3.PutObjectOutput, error) {
+func (s S3Bucket) UploadFile(client *s3.Client, file *io.Reader, fileHeader *multipart.FileHeader) (*s3.PutObjectOutput, error) {
 	uploadOutput, err := client.PutObject(context.TODO(), &s3.PutObjectInput{
 		Bucket:        &s.bucketName,
 		Key:           aws.String("videos/" + fileHeader.Filename),
@@ -98,4 +100,31 @@ func NewFileStore(fileStoreType string, cfg Config) (FileStore, error) {
 			endpoint:       cfg.AwsEndpoint,
 		}, nil
 	}
+}
+
+// Mocks
+
+type Mock struct {
+	fnCalls map[string]int
+	str     string
+	err     error
+}
+
+func (f Mock) Set(id int64, file *io.Reader, fileHeader *multipart.FileHeader) (string, error) {
+	tests.Called(f.fnCalls, "Set")
+	return f.str, f.err
+}
+
+func (f Mock) Get() {
+	tests.Called(f.fnCalls, "Get")
+}
+
+func (f Mock) GetFnCalls(fnName string) int {
+	value, exists := f.fnCalls[fnName]
+
+	if !exists {
+		return 0
+	}
+
+	return value
 }

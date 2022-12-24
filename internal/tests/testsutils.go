@@ -75,3 +75,19 @@ func NewTestDB(t *testing.T) *sql.DB {
 
 	return db
 }
+
+func Called(fnCalls map[string]int, key string) {
+
+	if fnCalls == nil {
+		fnCalls = make(map[string]int)
+	}
+
+	value, exists := fnCalls[key]
+
+	if !exists {
+		fnCalls[key] = 1
+		return
+	}
+
+	fnCalls[key] = value + 1
+}

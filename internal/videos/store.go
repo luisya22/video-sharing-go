@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"luismatosgarcia.dev/video-sharing-go/internal/pkg/datastore"
+	"luismatosgarcia.dev/video-sharing-go/internal/tests"
 	"time"
 )
 
@@ -102,4 +103,37 @@ func newStore(db *sql.DB) (*videoStore, error) {
 	return &videoStore{
 		db: db,
 	}, nil
+}
+
+// Mock
+
+type storeMock struct {
+	fnCalls map[string]int
+	video   *Video
+	err     error
+}
+
+func (s storeMock) Insert(ctx context.Context, v *Video) error {
+	tests.Called(s.fnCalls, "Insert")
+	return s.err
+}
+
+func (s storeMock) Update(ctx context.Context, v *Video) error {
+	tests.Called(s.fnCalls, "Update")
+	return s.err
+}
+
+func (s storeMock) ReadById(ctx context.Context, videoId int64) (*Video, error) {
+	tests.Called(s.fnCalls, "ReadById")
+	return s.video, s.err
+}
+
+func (s storeMock) GetFnCalls(fnName string) int {
+	value, exists := s.fnCalls[fnName]
+
+	if !exists {
+		return 0
+	}
+
+	return value
 }
