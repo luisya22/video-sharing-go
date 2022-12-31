@@ -152,10 +152,10 @@ func (vs *Service) UpdateVideo(ctx context.Context, videoId int64, videoInput *V
 		video.PublishedDate = *videoInput.PublishedDate
 	}
 
-	validator := validator.New()
+	validate := validator.New()
 
-	if ValidateVideo(validator, video); !validator.Valid() {
-		return nil, VideoValidationError, validator.Errors
+	if ValidateVideo(validate, video); !validate.Valid() {
+		return nil, VideoValidationError, validate.Errors
 	}
 
 	err = vs.store.Update(ctx, video)
@@ -166,7 +166,6 @@ func (vs *Service) UpdateVideo(ctx context.Context, videoId int64, videoInput *V
 	return video, nil, nil
 }
 
-// Initialize Video Service
 func NewService(db *sql.DB, fs filestore.FileStore, bg background.Routine) (Videos, error) {
 	vs, err := newStore(db)
 	if err != nil {
@@ -178,31 +177,4 @@ func NewService(db *sql.DB, fs filestore.FileStore, bg background.Routine) (Vide
 		filestore:  fs,
 		background: bg,
 	}, nil
-}
-
-// Mock
-
-type Mock struct {
-	Video     *Video
-	Err       error
-	ErrorsMap map[string]string
-}
-
-func (m Mock) UploadVideo(ctx context.Context, videoFileReader *io.Reader, fileHeader *multipart.FileHeader) (*Video, error, map[string]string) {
-	return m.Video, m.Err, m.ErrorsMap
-}
-
-func (m Mock) uploadVideoBackground(ctx context.Context, video *Video, videoFileReader *io.Reader, fileHeader *multipart.FileHeader) {
-}
-
-func (m Mock) CreateVideo(ctx context.Context, video *Video) (*Video, error, map[string]string) {
-	return m.Video, m.Err, m.ErrorsMap
-}
-
-func (m Mock) ReadVideo(ctx context.Context, videoId int64) (*Video, error, map[string]string) {
-	return m.Video, m.Err, m.ErrorsMap
-}
-
-func (m Mock) UpdateVideo(ctx context.Context, videoId int64, videoInput *VideoInput) (*Video, error, map[string]string) {
-	return m.Video, m.Err, m.ErrorsMap
 }

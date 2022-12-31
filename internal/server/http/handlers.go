@@ -3,7 +3,6 @@ package http
 import (
 	"github.com/julienschmidt/httprouter"
 	"luismatosgarcia.dev/video-sharing-go/internal/api"
-	"luismatosgarcia.dev/video-sharing-go/storage"
 	"net/http"
 )
 
@@ -18,10 +17,6 @@ func (h *Handlers) routes() http.Handler {
 
 	router.NotFound = http.HandlerFunc(h.errorHandler.notFoundResponse)
 	router.MethodNotAllowed = http.HandlerFunc(h.errorHandler.methodNotAllowedResponse)
-
-	fileServer := http.FileServer(http.FS(storage.Files))
-	router.Handler(http.MethodGet, "/videos/*filepath", fileServer)
-	router.Handler(http.MethodGet, "/html/*filepath", fileServer)
 
 	router.HandlerFunc(http.MethodGet, "/v1/healthcheck", h.healthCheckHandler)
 

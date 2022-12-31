@@ -105,22 +105,22 @@ func NewFileStore(fileStoreType string, cfg Config) (FileStore, error) {
 // Mocks
 
 type Mock struct {
-	fnCalls map[string]int
-	str     string
-	err     error
+	FnCalls map[string]int
+	Str     string
+	Err     error
 }
 
 func (f Mock) Set(id int64, file *io.Reader, fileHeader *multipart.FileHeader) (string, error) {
-	tests.Called(f.fnCalls, "Set")
-	return f.str, f.err
+	tests.Called(f.FnCalls, "Set")
+	return f.Str, f.Err
 }
 
 func (f Mock) Get() {
-	tests.Called(f.fnCalls, "Get")
+	tests.Called(f.FnCalls, "Get")
 }
 
 func (f Mock) GetFnCalls(fnName string) int {
-	value, exists := f.fnCalls[fnName]
+	value, exists := f.FnCalls[fnName]
 
 	if !exists {
 		return 0

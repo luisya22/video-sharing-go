@@ -58,11 +58,28 @@ func NewService(l *jsonlog.Logger) (Routine, error) {
 }
 
 // RoutineMock mock for testing purposes
-type RoutineMock struct{}
+type RoutineMock struct {
+	Wg sync.WaitGroup
+}
 
-func (r *RoutineMock) Dispatch(fn func(args []any), args []any) {}
+func (r *RoutineMock) Dispatch(fn func(args []any), args []any) {
+	r.Wg.Add(1)
 
-func (r *RoutineMock) Wait() {}
+	go func(args []any) {
+		defer r.Wg.Done()
+
+		defer func() {
+			if err := recover(); err != nil {
+			}
+		}()
+
+		fn(args)
+	}(args)
+}
+
+func (r *RoutineMock) Wait() {
+	r.Wg.Wait()
+}
 
 func (r *RoutineMock) PrintInfo(message string, properties map[string]string) {}
 

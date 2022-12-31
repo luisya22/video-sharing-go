@@ -8,35 +8,35 @@ import (
 	"os"
 	"testing"
 
-	"github.com/docker/go-connections/nat"
 	_ "github.com/lib/pq"
 	tc "github.com/testcontainers/testcontainers-go"
 )
 
 func NewTestDB(t *testing.T) *sql.DB {
-	postgresPort := nat.Port("5432/tcp")
-	postgres, err := tc.GenericContainer(context.Background(),
+	containerReq := tc.ContainerRequest{
+		Image:        "postgres",
+		ExposedPorts: []string{"5432/tcp"},
+		Env: map[string]string{
+			"POSTGRES_PASSWORD": "pass",
+			"POSTGRES_USER":     "user",
+		},
+		WaitingFor: wait.ForAll(
+			wait.ForLog("database system is ready to accept connections"),
+			wait.ForListeningPort("5432/tcp"),
+		),
+	}
+
+	dbContainer, err := tc.GenericContainer(context.Background(),
 		tc.GenericContainerRequest{
-			ContainerRequest: tc.ContainerRequest{
-				Image:        "postgres",
-				ExposedPorts: []string{postgresPort.Port()},
-				Env: map[string]string{
-					"POSTGRES_PASSWORD": "pass",
-					"POSTGRES_USER":     "user",
-				},
-				WaitingFor: wait.ForAll(
-					wait.ForLog("database system is ready to accept connections"),
-					wait.ForListeningPort(postgresPort),
-				),
-			},
-			Started: true,
+			ContainerRequest: containerReq,
+			Started:          true,
 		},
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	hostPort, err := postgres.MappedPort(context.Background(), postgresPort)
+	hostPort, err := dbContainer.MappedPort(context.Background(), "5432")
 	if err != nil {
 		t.Fatal(err)
 	}
